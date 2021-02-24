@@ -1,15 +1,17 @@
 package algoorder
 
+import "github.com/shopspring/decimal"
+
 type PlaceOrderRequest struct {
-	AccountId     int    `json:"accountId"`
-	Symbol        string `json:"symbol"`
-	OrderPrice    string `json:"orderPrice"`
-	OrderSide     string `json:"orderSide"`
-	OrderSize     string `json:"orderSize"`
-	OrderValue    string `json:"orderValue"`
-	TimeInForce   string `json:"timeInForce"`
-	OrderType     string `json:"orderType"`
-	ClientOrderId string `json:"clientOrderId"`
-	StopPrice     string `json:"stopPrice"`
-	TrailingRate  string `json:"trailingRate"`
+	AccountId     int64           `json:"accountId"`
+	Symbol        string          `json:"symbol"`
+	OrderPrice    decimal.Decimal `json:"orderPrice"`
+	OrderSide     string          `json:"orderSide"`
+	OrderSize     decimal.Decimal `json:"orderSize"`
+	OrderValue    decimal.Decimal `json:"orderValue"`
+	TimeInForce   string          `json:"timeInForce"`
+	OrderType     string          `json:"orderType"`
+	ClientOrderId string          `json:"clientOrderId"`
+	StopPrice     decimal.Decimal `json:"stopPrice"`
+	TrailingRate  decimal.Decimal `json:"trailingRate"`
 }

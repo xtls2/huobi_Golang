@@ -1,6 +1,7 @@
 package algoorderclientexample
 
 import (
+	"github.com/shopspring/decimal"
 	"github.com/xtls2/huobi_golang/config"
 	"github.com/xtls2/huobi_golang/logging/applogger"
 	"github.com/xtls2/huobi_golang/pkg/client"
@@ -21,13 +22,13 @@ func placeOrder() {
 	request := algoorder.PlaceOrderRequest{
 		AccountId:     11136102,
 		Symbol:        "htusdt",
-		OrderPrice:    "4.4",
+		OrderPrice:    decimal.NewFromFloat(4.4),
 		OrderSide:     "buy",
-		OrderSize:     "2",
+		OrderSize:     decimal.NewFromInt(2),
 		TimeInForce:   "gtc",
 		OrderType:     "limit",
 		ClientOrderId: "huobi1901",
-		StopPrice:     "4",
+		StopPrice:     decimal.NewFromFloat(2.0),
 	}
 	resp, err := client.PlaceOrder(&request)
 	if err != nil {

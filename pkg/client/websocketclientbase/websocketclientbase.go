@@ -12,10 +12,10 @@ import (
 )
 
 const (
-	TimerIntervalSecond = 5
+	TimerIntervalSecond = 7
 	ReconnectWaitSecond = 60
 
-	wsPath = "/ws"
+	wsPath   = "/ws"
 	feedPath = "/feed"
 )
 
@@ -211,9 +211,6 @@ func (p *WebSocketClientBase) readLoop() {
 				time.Sleep(TimerIntervalSecond * time.Second)
 				continue
 			}
-
-			p.lastReceivedTime = time.Now()
-
 			// decompress gzip data if it is binary message
 			if msgType == websocket.BinaryMessage {
 				message, err := gzip.GZipDecompress(buf)
@@ -227,6 +224,7 @@ func (p *WebSocketClientBase) readLoop() {
 
 				// If it is Ping then respond Pong
 				if pingMsg != nil && pingMsg.Ping != 0 {
+					p.lastReceivedTime = time.Now()
 					applogger.Debug("Received Ping: %d", pingMsg.Ping)
 					pongMsg := fmt.Sprintf("{\"pong\": %d}", pingMsg.Ping)
 					p.Send(pongMsg)

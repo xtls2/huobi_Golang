@@ -1,5 +1,7 @@
 package account
 
+import "github.com/shopspring/decimal"
+
 type RequestAccountV1Response struct {
 	Timestamp int64            `json:"ts"`
 	Op        string           `json:"op"`
@@ -17,7 +19,7 @@ type AccountBalance struct {
 }
 
 type Balance struct {
-	Currency string `json:"currency"`
-	Type     string `json:"type"`
-	Balance  string `json:"balance"`
+	Currency string          `json:"currency"`
+	Type     string          `json:"type"`
+	Balance  decimal.Decimal `json:"balance"`
 }

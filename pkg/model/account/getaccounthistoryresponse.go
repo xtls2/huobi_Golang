@@ -1,5 +1,7 @@
 package account
 
+import "github.com/shopspring/decimal"
+
 type GetAccountHistoryResponse struct {
 	Status string           `json:"status"`
 	Data   []AccountHistory `json:"data"`
@@ -7,12 +9,12 @@ type GetAccountHistoryResponse struct {
 }
 
 type AccountHistory struct {
-	AccountId    int64  `json:"account-id"`
-	Currency     string `json:"currency"`
-	TransactAmt  string `json:"transact-amt"`
-	TransactType string `json:"transact-type"`
-	RecordId     int64  `json:"record-id"`
-	AvailBalance string `json:"avail-balance"`
-	AcctBalance  string `json:"acct-balance"`
-	TransactTime int64  `json:"transact-time"`
+	AccountId    int64           `json:"account-id"`
+	Currency     string          `json:"currency"`
+	TransactAmt  decimal.Decimal `json:"transact-amt"`
+	TransactType string          `json:"transact-type"`
+	RecordId     int64           `json:"record-id"`
+	AvailBalance decimal.Decimal `json:"avail-balance"`
+	AcctBalance  decimal.Decimal `json:"acct-balance"`
+	TransactTime int64           `json:"transact-time"`
 }

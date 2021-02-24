@@ -16,9 +16,9 @@ func RunAllExamples() {
 
 //  Get the basic information of ETF creation and redemption
 func getSwapConfig() {
-	client := new(client.ETFClient).Init(config.AccessKey, config.SecretKey, config.Host)
+	etfClient := new(client.ETFClient).Init(config.AccessKey, config.SecretKey, config.Host)
 	currency := "hb10"
-	resp, err := client.GetSwapConfig(currency)
+	resp, err := etfClient.GetSwapConfig(currency)
 	if err != nil {
 		applogger.Error(err.Error())
 	} else {

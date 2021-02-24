@@ -9,7 +9,7 @@ type SubscribeAccountV1Response struct {
 	Data      struct {
 		Event string `json:"event"`
 		List  []struct {
-			AccountId int    `json:"account-id"`
+			AccountId int64  `json:"account-id"`
 			Currency  string `json:"currency"`
 			Type      string `json:"type"`
 			Balance   string `json:"balance"`
