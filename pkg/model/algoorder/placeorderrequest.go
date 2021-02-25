@@ -12,6 +12,6 @@ type PlaceOrderRequest struct {
 	TimeInForce   string          `json:"timeInForce"`
 	OrderType     string          `json:"orderType"`
 	ClientOrderId string          `json:"clientOrderId"`
-	StopPrice     decimal.Decimal `json:"stopPrice"`
+	StopPrice     string          `json:"stopPrice"`
 	TrailingRate  decimal.Decimal `json:"trailingRate"`
 }

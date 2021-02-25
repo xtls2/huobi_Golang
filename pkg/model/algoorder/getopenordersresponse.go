@@ -16,7 +16,7 @@ type GetOpenOrdersResponse struct {
 		OrderSide     string          `json:"orderSide"`
 		TimeInForce   string          `json:"timeInForce"`
 		OrderType     string          `json:"orderType"`
-		StopPrice     decimal.Decimal `json:"stopPrice"`
+		StopPrice     string          `json:"stopPrice"`
 		TrailingRate  decimal.Decimal `json:"trailingRate"`
 		OrderOrigTime int64           `json:"orderOrigTime"`
 		LastActTime   int64           `json:"lastActTime"`
