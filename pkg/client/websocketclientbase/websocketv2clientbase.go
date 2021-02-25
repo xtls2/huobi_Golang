@@ -9,6 +9,7 @@ import (
 	"github.com/xtls2/huobi_golang/logging/applogger"
 	"github.com/xtls2/huobi_golang/pkg/model/auth"
 	"github.com/xtls2/huobi_golang/pkg/model/base"
+	"strings"
 	"sync"
 	"time"
 )
@@ -29,7 +30,6 @@ type WebSocketV2ClientBase struct {
 	messageHandler                MessageHandler
 	responseHandler               ResponseHandler
 
-	stopReadChannel   chan int
 	stopTickerChannel chan int
 	ticker            *time.Ticker
 	lastReceivedTime  time.Time
@@ -41,7 +41,6 @@ type WebSocketV2ClientBase struct {
 // Initializer
 func (p *WebSocketV2ClientBase) Init(accessKey string, secretKey string, host string) *WebSocketV2ClientBase {
 	p.host = host
-	p.stopReadChannel = make(chan int, 1)
 	p.stopTickerChannel = make(chan int, 1)
 	p.requestBuilder = new(requestbuilder.WebSocketV2RequestBuilder).Init(accessKey, secretKey, host, websocketV2Path)
 	p.sendMutex = &sync.Mutex{}
@@ -121,12 +120,10 @@ func (p *WebSocketV2ClientBase) disconnectWebSocket() {
 	if p.conn == nil {
 		return
 	}
-
 	// start a new goroutine to send a signal
-	go p.stopReadLoop()
-
 	applogger.Debug("WebSocket disconnecting...")
 	err := p.conn.Close()
+	p.conn = nil
 	if err != nil {
 		applogger.Error("WebSocket disconnect error: %s", err)
 		return
@@ -138,7 +135,6 @@ func (p *WebSocketV2ClientBase) disconnectWebSocket() {
 // initialize a ticker and start a goroutine tickerLoop()
 func (p *WebSocketV2ClientBase) startTicker() {
 	p.ticker = time.NewTicker(TimerIntervalSecond * time.Second)
-
 	go p.tickerLoop()
 }
 
@@ -169,6 +165,8 @@ func (p *WebSocketV2ClientBase) tickerLoop() {
 				applogger.Info("WebSocket reconnect...")
 				p.disconnectWebSocket()
 				p.connectWebSocket()
+				p.startReadLoop()
+				p.lastReceivedTime = time.Now()
 			}
 		}
 	}
@@ -179,80 +177,65 @@ func (p *WebSocketV2ClientBase) startReadLoop() {
 	go p.readLoop()
 }
 
-// stop the goroutine readLoop()
-func (p *WebSocketV2ClientBase) stopReadLoop() {
-	p.stopReadChannel <- 1
-}
-
 // defines a for loop to read data from server
 // it will stop once it receives the signal from stopReadChannel
 func (p *WebSocketV2ClientBase) readLoop() {
 	applogger.Debug("readLoop started")
 	for {
-		select {
-		// Receive data from stopChannel
-		case <-p.stopReadChannel:
-			applogger.Debug("readLoop stopped")
+		if p.conn == nil {
+			applogger.Debug("readLoop stoped nil")
 			return
-
-		default:
-			if p.conn == nil {
-				applogger.Error("Read error: no connection available")
-				time.Sleep(TimerIntervalSecond * time.Second)
-				continue
+		}
+		msgType, buf, err := p.conn.ReadMessage()
+		if err != nil {
+			if strings.Contains(err.Error(), "use of closed network connection") {
+				applogger.Debug("readLoop stoped close")
+				return
 			}
+			applogger.Error("Read error: %s", err)
+			continue
+		}
 
-			msgType, buf, err := p.conn.ReadMessage()
+		// decompress gzip data if it is binary message
+		var message string
+		if msgType == websocket.BinaryMessage {
+			message, err = gzip.GZipDecompress(buf)
 			if err != nil {
-				applogger.Error("Read error: %s", err)
-				time.Sleep(TimerIntervalSecond * time.Second)
-				continue
+				applogger.Error("UnGZip data error: %s", err)
+				return
 			}
+		} else if msgType == websocket.TextMessage {
+			message = string(buf)
+		}
 
+		// Try to pass as PingV2Message
+		// If it is Ping then respond Pong
+		pingV2Msg := model.ParsePingV2Message(message)
+		if pingV2Msg.IsPing() {
 			p.lastReceivedTime = time.Now()
+			pongMsg := strings.ReplaceAll(message, "ping", "pong")
+			go p.Send(pongMsg)
+		} else {
+			// Try to pass as websocket v2 authentication response
+			// If it is then invoke authentication handler
+			wsV2Resp := base.ParseWSV2Resp(message)
+			if wsV2Resp != nil {
+				switch wsV2Resp.Action {
+				case "req":
+					authResp := auth.ParseWSV2AuthResp(message)
+					if authResp != nil && p.authenticationResponseHandler != nil {
+						p.authenticationResponseHandler(authResp)
+					}
 
-			// decompress gzip data if it is binary message
-			var message string
-			if msgType == websocket.BinaryMessage {
-				message, err = gzip.GZipDecompress(buf)
-				if err != nil {
-					applogger.Error("UnGZip data error: %s", err)
-					return
-				}
-			} else if msgType == websocket.TextMessage {
-				message = string(buf)
-			}
-
-			// Try to pass as PingV2Message
-			// If it is Ping then respond Pong
-			pingV2Msg := model.ParsePingV2Message(message)
-			if pingV2Msg.IsPing() {
-				applogger.Debug("Received Ping: %d", pingV2Msg.Data.Timestamp)
-				pongMsg := fmt.Sprintf("{\"action\": \"pong\", \"data\": { \"ts\": %d } }", pingV2Msg.Data.Timestamp)
-				p.Send(pongMsg)
-				applogger.Debug("Respond  Pong: %d", pingV2Msg.Data.Timestamp)
-			} else {
-				// Try to pass as websocket v2 authentication response
-				// If it is then invoke authentication handler
-				wsV2Resp := base.ParseWSV2Resp(message)
-				if wsV2Resp != nil {
-					switch wsV2Resp.Action {
-					case "req":
-						authResp := auth.ParseWSV2AuthResp(message)
-						if authResp != nil && p.authenticationResponseHandler != nil {
-							p.authenticationResponseHandler(authResp)
+				case "sub", "push":
+					{
+						result, err := p.messageHandler(message)
+						if err != nil {
+							applogger.Error("Handle message error: %s", err)
+							continue
 						}
-
-					case "sub", "push":
-						{
-							result, err := p.messageHandler(message)
-							if err != nil {
-								applogger.Error("Handle message error: %s", err)
-								continue
-							}
-							if p.responseHandler != nil {
-								p.responseHandler(result)
-							}
+						if p.responseHandler != nil {
+							p.responseHandler(result)
 						}
 					}
 				}

@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	TimerIntervalSecond = 7
+	TimerIntervalSecond = 10
 	ReconnectWaitSecond = 60
 
 	wsPath   = "/ws"
@@ -36,7 +36,6 @@ type WebSocketClientBase struct {
 	connectedHandler  ConnectedHandler
 	messageHandler    MessageHandler
 	responseHandler   ResponseHandler
-	stopReadChannel   chan int
 	stopTickerChannel chan int
 	ticker            *time.Ticker
 	lastReceivedTime  time.Time
@@ -47,7 +46,6 @@ type WebSocketClientBase struct {
 func (p *WebSocketClientBase) Init(host string) *WebSocketClientBase {
 	p.host = host
 	p.path = wsPath
-	p.stopReadChannel = make(chan int, 1)
 	p.stopTickerChannel = make(chan int, 1)
 	p.sendMutex = &sync.Mutex{}
 
@@ -124,16 +122,13 @@ func (p *WebSocketClientBase) disconnectWebSocket() {
 	if p.conn == nil {
 		return
 	}
-
-	p.stopReadLoop()
-
 	applogger.Debug("WebSocket disconnecting...")
 	err := p.conn.Close()
+	p.conn = nil
 	if err != nil {
 		applogger.Error("WebSocket disconnect error: %s", err)
 		return
 	}
-
 	applogger.Info("WebSocket disconnected")
 }
 
@@ -166,9 +161,8 @@ func (p *WebSocketClientBase) tickerLoop() {
 		// Receive tick from tickChannel
 		case <-p.ticker.C:
 			elapsedSecond := time.Now().Sub(p.lastReceivedTime).Seconds()
-			applogger.Debug("WebSocket received data %f sec ago", elapsedSecond)
-
 			if elapsedSecond > ReconnectWaitSecond {
+				p.lastReceivedTime = time.Now()
 				applogger.Info("WebSocket reconnect...")
 				p.disconnectWebSocket()
 				p.connectWebSocket()
@@ -182,63 +176,46 @@ func (p *WebSocketClientBase) startReadLoop() {
 	go p.readLoop()
 }
 
-// stop the goroutine readLoop()
-func (p *WebSocketClientBase) stopReadLoop() {
-	p.stopReadChannel <- 1
-}
-
 // defines a for loop to read data from server
 // it will stop once it receives the signal from stopReadChannel
 func (p *WebSocketClientBase) readLoop() {
 	applogger.Debug("readLoop started")
 	for {
-		select {
-		// Receive data from stopChannel
-		case <-p.stopReadChannel:
-			applogger.Debug("readLoop stopped")
+		if p.conn == nil {
+			applogger.Error("readLoop stop nil")
 			return
+		}
 
-		default:
-			if p.conn == nil {
-				applogger.Error("Read error: no connection available")
-				time.Sleep(TimerIntervalSecond * time.Second)
-				continue
-			}
-
-			msgType, buf, err := p.conn.ReadMessage()
+		msgType, buf, err := p.conn.ReadMessage()
+		if err != nil {
+			applogger.Error("readLoop stop close")
+			return
+		}
+		// decompress gzip data if it is binary message
+		if msgType == websocket.BinaryMessage {
+			message, err := gzip.GZipDecompress(buf)
 			if err != nil {
-				applogger.Error("Read error: %s", err)
-				time.Sleep(TimerIntervalSecond * time.Second)
-				continue
+				applogger.Error("UnGZip data error: %s", err)
+				return
 			}
-			// decompress gzip data if it is binary message
-			if msgType == websocket.BinaryMessage {
-				message, err := gzip.GZipDecompress(buf)
+
+			// Try to pass as PingMessage
+			pingMsg := model.ParsePingMessage(message)
+
+			// If it is Ping then respond Pong
+			if pingMsg != nil && pingMsg.Ping != 0 {
+				p.lastReceivedTime = time.Now()
+				pongMsg := strings.ReplaceAll(message, "ping", "pong")
+				go p.Send(pongMsg)
+			} else if strings.Contains(message, "tick") || strings.Contains(message, "data") {
+				// If it contains expected string, then invoke message handler and response handler
+				result, err := p.messageHandler(message)
 				if err != nil {
-					applogger.Error("UnGZip data error: %s", err)
-					return
+					applogger.Error("Handle message error: %s", err)
+					continue
 				}
-
-				// Try to pass as PingMessage
-				pingMsg := model.ParsePingMessage(message)
-
-				// If it is Ping then respond Pong
-				if pingMsg != nil && pingMsg.Ping != 0 {
-					p.lastReceivedTime = time.Now()
-					applogger.Debug("Received Ping: %d", pingMsg.Ping)
-					pongMsg := fmt.Sprintf("{\"pong\": %d}", pingMsg.Ping)
-					p.Send(pongMsg)
-					applogger.Debug("Replied Pong: %d", pingMsg.Ping)
-				} else if strings.Contains(message, "tick") || strings.Contains(message, "data") {
-					// If it contains expected string, then invoke message handler and response handler
-					result, err := p.messageHandler(message)
-					if err != nil {
-						applogger.Error("Handle message error: %s", err)
-						continue
-					}
-					if p.responseHandler != nil {
-						p.responseHandler(result)
-					}
+				if p.responseHandler != nil {
+					p.responseHandler(result)
 				}
 			}
 		}

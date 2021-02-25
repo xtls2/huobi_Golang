@@ -36,25 +36,25 @@ func (p *PrivateUrlBuilder) Init(accessKey string, secretKey string, host string
 }
 
 func (p *PrivateUrlBuilder) Build(method string, path string, request *model.GetRequest) string {
-	time := time.Now().UTC()
+	utc := time.Now().UTC()
 
-	return p.BuildWithTime(method, path, time, request)
+	return p.BuildWithTime(method, path, utc, request)
 }
 
 func (p *PrivateUrlBuilder) BuildWithTime(method string, path string, utcDate time.Time, request *model.GetRequest) string {
-	time := utcDate.Format("2006-01-02T15:04:05")
+	format := utcDate.Format("2006-01-02T15:04:05")
 
 	req := new(model.GetRequest).InitFrom(request)
 	req.AddParam(p.akKey, p.akValue)
 	req.AddParam(p.smKey, p.smValue)
 	req.AddParam(p.svKey, p.svValue)
-	req.AddParam(p.tKey, time)
+	req.AddParam(p.tKey, format)
 
 	parameters := req.BuildParams()
 
 	signature := p.signer.Sign(method, p.host, path, parameters)
 
-	url := fmt.Sprintf("https://%s%s?%s&Signature=%s", p.host, path, parameters, url.QueryEscape(signature))
+	host := fmt.Sprintf("https://%s%s?%s&Signature=%s", p.host, path, parameters, url.QueryEscape(signature))
 
-	return url
+	return host
 }
