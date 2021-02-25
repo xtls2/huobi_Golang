@@ -159,7 +159,6 @@ func (p *WebSocketV2ClientBase) tickerLoop() {
 		// Receive tick from tickChannel
 		case <-p.ticker.C:
 			elapsedSecond := time.Now().Sub(p.lastReceivedTime).Seconds()
-			applogger.Debug("WebSocket received data %f sec ago", elapsedSecond)
 
 			if elapsedSecond > ReconnectWaitSecond {
 				applogger.Info("WebSocket reconnect...")
