@@ -161,14 +161,18 @@ func (p *WebSocketV2ClientBase) tickerLoop() {
 			elapsedSecond := time.Now().Sub(p.lastReceivedTime).Seconds()
 
 			if elapsedSecond > ReconnectWaitSecond {
-				applogger.Info("WebSocket reconnect...")
-				p.disconnectWebSocket()
-				p.connectWebSocket()
-				p.startReadLoop()
-				p.lastReceivedTime = time.Now()
+				p.reconnect()
 			}
 		}
 	}
+}
+
+func (p *WebSocketV2ClientBase) reconnect() {
+	applogger.Info("WebSocket reconnect...")
+	p.lastReceivedTime = time.Now()
+	p.disconnectWebSocket()
+	p.connectWebSocket()
+	p.startReadLoop()
 }
 
 // start a goroutine readLoop()
@@ -192,7 +196,8 @@ func (p *WebSocketV2ClientBase) readLoop() {
 				return
 			}
 			applogger.Error("Read error: %s", err)
-			continue
+			p.reconnect()
+			return
 		}
 
 		// decompress gzip data if it is binary message

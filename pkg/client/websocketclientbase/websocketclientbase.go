@@ -162,13 +162,17 @@ func (p *WebSocketClientBase) tickerLoop() {
 		case <-p.ticker.C:
 			elapsedSecond := time.Now().Sub(p.lastReceivedTime).Seconds()
 			if elapsedSecond > ReconnectWaitSecond {
-				p.lastReceivedTime = time.Now()
-				applogger.Info("WebSocket reconnect...")
-				p.disconnectWebSocket()
-				p.connectWebSocket()
+				p.reconnect()
 			}
 		}
 	}
+}
+
+func (p *WebSocketClientBase) reconnect() {
+	p.lastReceivedTime = time.Now()
+	applogger.Info("WebSocket reconnect...")
+	p.disconnectWebSocket()
+	p.connectWebSocket()
 }
 
 // start a goroutine readLoop()
